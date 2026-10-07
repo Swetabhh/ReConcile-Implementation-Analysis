@@ -1,46 +1,45 @@
-# ReConcile — Implementation Study & Independent Analysis
+# ReConcile: Implementation Study & Independent Analysis
 
-**Paper:** *ReConcile: Round-Table Conference Improves Reasoning via Consensus Among Diverse LLMs*  
-**Venue:** ACL 2024  
+**Paper:** *ReConcile: Round-Table Conference Improves Reasoning via Consensus Among Diverse LLMs* (ACL 2024)
 **Original authors:** Justin Chih-Yao Chen, Swarnadeep Saha, and Mohit Bansal
 
-**Official paper:** [arXiv:2309.13007](https://arxiv.org/abs/2309.13007)  
-**Official repository:** [dinobby/ReConcile](https://github.com/dinobby/ReConcile)
+**Paper:** [arXiv:2309.13007](https://arxiv.org/abs/2309.13007)
+**Official repo:** [dinobby/ReConcile](https://github.com/dinobby/ReConcile)
 
 ![ReConcile framework](https://i.imgur.com/mREgiI7.png)
 
 ## Overview
 
-ReConcile is a multi-agent reasoning framework in which multiple language models independently attempt a problem and then interact across multiple rounds. Instead of relying on a single model response, the framework uses discussion, confidence information, and consensus to produce the final answer.
+ReConcile is a multi-agent reasoning framework. Several language models each take a first, independent shot at a problem, then talk it over across a few rounds. Rather than trusting one model's answer, the final result comes from their discussion, how confident each one is, and whether they end up agreeing.
 
-I worked through the authors' official codebase to understand how the system is implemented, with particular attention to:
+I read through the authors' official codebase to figure out how the system actually works. I paid the most attention to:
 
-- how different language-model backends are integrated;
-- how demonstrations are selected and inserted into prompts;
-- how initial independent responses are generated;
-- how disagreement between agents is detected;
-- how follow-up discussion rounds are constructed;
-- how confidence values are converted into weighted votes;
-- how raw model outputs are parsed, normalized, and evaluated.
+- how the different model backends are plugged in;
+- how demonstrations get picked and dropped into prompts;
+- how the first round of independent answers is generated;
+- how the code notices that agents disagree;
+- how the follow-up discussion prompts are built;
+- how confidence scores turn into weighted votes;
+- how raw model output is parsed, cleaned up, and evaluated.
 
 ![Multi-round discussion](https://camo.githubusercontent.com/aad0afbd7e71ccb2b33ca6f01fe498ccb9fff8ed6a22d3a1d016cdde142d178e/68747470733a2f2f692e696d6775722e636f6d2f34754d756d67442e706e67)
 
-## What This Repository Is (and Is Not)
+## What this repo is (and isn't)
 
-This repository presents an **implementation-focused study** of ReConcile. It is not a from-scratch reimplementation of the method.
+This is a study of the existing implementation. I did not rebuild ReConcile from scratch.
 
-The study covers:
+Here's what I walked through:
 
-- the end-to-end path from dataset loading to final evaluation;
-- how `run.py`, `generation.py`, `data_utils.py`, `utils.py`, and `claude.py` interact;
-- how prompts are constructed for different model backends;
-- how multi-round debate and consensus are implemented;
-- how answers are normalized and confidence information is handled;
-- how parsing and evaluation vary across datasets.
+- the full path from loading a dataset to producing evaluation results;
+- how `run.py`, `generation.py`, `data_utils.py`, `utils.py`, and `claude.py` fit together;
+- how prompts differ from one model backend to the next;
+- how the multi-round debate and consensus steps work in code;
+- how answers are normalized and confidence is handled;
+- how parsing and evaluation change from dataset to dataset.
 
-The research idea, original implementation, datasets, and reported results belong to the original authors.
+The research idea, the original code, the datasets, and the reported results all belong to the original authors.
 
-## Repository Structure
+## Repository structure
 
 ```text
 .
@@ -64,7 +63,7 @@ The research idea, original implementation, datasets, and reported results belon
 └── README.md
 ```
 
-## How the Pipeline Flows
+## How the pipeline flows
 
 ```text
 Dataset
@@ -97,56 +96,44 @@ Consensus / weighted voting
        Evaluation
 ```
 
-## Implementation-Level Observations
+## What I noticed in the code
 
-### 1. Model-specific interfaces
+### 1. Each model has its own interface
 
-The released implementation does not expose one fully uniform interaction layer across all model providers. Claude, GPT, and Bard use different interaction patterns, so generation and debate logic are adapted for each model family.
+The released code doesn't give you one clean, uniform layer for talking to every provider. Claude, GPT, and Bard are each called a little differently, so the generation and debate logic is adapted per model family. You can see this in `generation.py`, where the model-specific functions live side by side but are kept separate.
 
-This is visible in `generation.py`, where model-specific generation and debate functions are maintained separately.
+### 2. Disagreement is what triggers more discussion
 
-### 2. Disagreement triggers additional discussion
+After the first round, `parse_output()` in `utils.py` turns each model's response into a structured form and checks whether the agents agree. If they don't, their answers and explanations get folded into a debate prompt for the next round. In practice, disagreement acts as the signal that says "keep talking."
 
-After the initial round, `parse_output()` in `utils.py` converts model responses into a structured representation and checks whether the agents agree.
+### 3. Confidence feeds into the vote
 
-When disagreement remains, the agents' answers and explanations are incorporated into a debate prompt for a subsequent round.
+`trans_confidence()` maps confidence values onto a small set of discrete weights, and those weights are summed across each candidate answer. The result is a weighted alternative to plain majority voting, so the consensus depends on both what a model answered and how sure it said it was.
 
-This makes disagreement an explicit control signal in the multi-agent reasoning process.
+### 4. Parsing is a bigger deal than it looks
 
-### 3. Confidence contributes to consensus
-
-`trans_confidence()` maps confidence values to discrete weights. The implementation then aggregates those weights across predicted answers, providing a weighted alternative to plain majority voting.
-
-The mechanism therefore uses both the predicted answer and the model's reported confidence when computing consensus.
-
-### 4. Output processing is a substantial part of the implementation
-
-The prompting logic expects structured JSON responses, but the implementation also accounts for responses that are malformed or incomplete.
-
-Parsing, normalization, fallback handling, and confidence conversion are therefore integral parts of the pipeline rather than a separate cosmetic post-processing stage.
+The prompts ask for structured JSON, but models don't always comply, and the code has to cope with malformed or incomplete responses. Parsing, normalization, fallbacks, and confidence conversion end up being a real part of the pipeline, not just tidying up at the end.
 
 ## Datasets
 
-The repository contains data for:
+The repo includes data for four datasets, all under `dataset/`:
 
 - StrategyQA (`SQA`)
 - GSM8K (`GSM8k`)
 - ECQA (`ECQA`)
 - AQuA (`Aqua`)
 
-The dataset files are stored under `dataset/`.
+The `convincing/` folder holds precomputed examples that get used as demonstrations when prompts are built.
 
-The `convincing/` directory contains precomputed examples used as demonstrations when constructing prompts.
+## Environment and reproducibility
 
-## Environment and Reproducibility
-
-The original repository specifies:
+The original repo specifies:
 
 ```text
 Python 3.10.11
 ```
 
-My local inspection environment was:
+My local setup for inspecting it:
 
 ```text
 Python 3.11.15
@@ -155,11 +142,11 @@ Intel Core i7-13620H
 NVIDIA RTX 3050 6 GB
 ```
 
-ReConcile relies primarily on external model APIs rather than local GPU inference for the model backends used by the released implementation. Running the original pipeline at full scale therefore depends on access to the relevant provider APIs and credentials.
+The released implementation leans on external model APIs rather than local GPU inference, so the GPU isn't really a factor. Running the pipeline at full scale depends on having access to the relevant providers and credentials.
 
-### Local Validation
+### Local validation
 
-I syntax-checked the main Python modules in the repository with Python 3.11.15:
+I syntax-checked the main Python modules with Python 3.11.15:
 
 ```text
 run.py
@@ -169,21 +156,17 @@ utils.py
 claude.py
 ```
 
-All five compiled successfully without syntax errors.
+All five compiled with no syntax errors. That's the extent of it: **I haven't reproduced the paper's experiments end to end, and this repo doesn't claim to.**
 
-This repository does **not** claim a full end-to-end reproduction of the paper's experiments.
+## Running the original pipeline
 
-## Running the Original Pipeline
-
-The original implementation expects environment variables for its API integrations, including Azure OpenAI, PaLM, and Claude.
-
-The original execution pattern is:
+The original code expects environment variables for its API integrations (Azure OpenAI, PaLM, and Claude). The original way to run it is:
 
 ```powershell
 python run.py --num_samples 100 --dataset SQA
 ```
 
-Supported dataset identifiers include:
+The dataset identifiers you can pass are:
 
 ```text
 SQA
@@ -192,62 +175,57 @@ ECQA
 Aqua
 ```
 
-The released implementation depends on older API interfaces and external credentials. The command above therefore documents the original execution path; it is not presented as evidence of a current paper-scale reproduction.
+The code depends on older API interfaces and external credentials, so this command just documents how the authors ran things. It isn't evidence that I've reproduced their results today.
 
-## Evidence and Scope of Validation
+## What I did and didn't verify
 
-I separate three levels of evidence:
+I want to be clear about three different levels of evidence:
 
-**Implementation inspection**  
-I traced the source code and documented the main execution paths and design choices.
+- **Implementation inspection.** I traced the source and wrote down the main execution paths and design choices.
+- **Light local validation.** The main modules compile in my environment.
+- **Paper reproduction.** I haven't regenerated the paper's full results, and I'm not claiming I have.
 
-**Lightweight local validation**  
-The main Python modules compile successfully in my local environment.
-
-**Paper reproduction**  
-I have not regenerated the paper's full experimental results in this repository, and I do not claim to have done so.
-
-Keeping these levels separate avoids conflating understanding of a research implementation with independent reproduction of its reported experiments.
+Understanding how a research codebase works is not the same thing as independently reproducing its experiments, and I'd rather not blur the two.
 
 ## Limitations
 
-The released implementation reflects the API and model ecosystem available when the project was developed:
+The code reflects the API and model landscape at the time the project was built:
 
-- the generation stack relies on older provider/API interfaces;
-- running the models requires external credentials;
-- the Claude path uses a third-party API wrapper;
-- the prompting pipeline relies on structured model outputs and includes fallback parsing when those outputs are imperfect;
-- the setup is not a modern provider-agnostic LLM serving framework.
+- generation relies on older provider interfaces;
+- running the models needs external credentials;
+- the Claude path goes through a third-party API wrapper;
+- the prompts depend on structured outputs, with fallback parsing for when those come back imperfect;
+- it's not a modern, provider-agnostic LLM serving setup.
 
-As a result, reproducing the original environment today can require additional compatibility work.
+Because of all this, getting the original environment working today can take some extra compatibility effort.
 
-## Research Questions Motivated by the Implementation
+## Questions this raised for me
 
-Tracing the implementation raises several questions about multi-agent LLM reasoning:
+Going through the implementation left me wondering about a few things in multi-agent LLM reasoning:
 
-1. How should disagreement be represented so that debate focuses on consequential conflicts rather than superficial differences?
-2. Under what conditions does confidence-weighted consensus outperform simple majority voting?
-3. How many discussion rounds are useful before additional interaction stops providing meaningful benefit?
-4. How should heterogeneous agents be selected or assigned complementary roles?
-5. Can communication cost be reduced without losing the benefits of multi-agent reasoning?
-6. How robust is consensus when participating agents share similar failure modes?
+1. How should disagreement be represented so debate focuses on conflicts that matter, not surface-level differences?
+2. When does confidence-weighted consensus actually beat simple majority voting?
+3. How many discussion rounds are worth it before extra interaction stops helping?
+4. How should different agents be chosen, or given complementary roles?
+5. Can communication costs come down without losing the benefit of multiple agents?
+6. How well does consensus hold up when the agents share similar failure modes?
 
-These are open research questions motivated by the implementation. They are not contributions claimed by this repository.
+These are open questions the code made me think about. I'm not claiming them as contributions of this repo.
 
-## Attribution and Scope
+## Attribution
 
-This repository builds on the authors' official implementation of:
+This repo builds on the authors' official implementation of:
 
 **ReConcile: Round-Table Conference Improves Reasoning via Consensus Among Diverse LLMs**
 
-**Original authors:** Justin Chih-Yao Chen, Swarnadeep Saha, and Mohit Bansal  
-**Venue:** ACL 2024  
-**Official paper:** [arXiv:2309.13007](https://arxiv.org/abs/2309.13007)  
-**Official repository:** [dinobby/ReConcile](https://github.com/dinobby/ReConcile)
+**Original authors:** Justin Chih-Yao Chen, Swarnadeep Saha, and Mohit Bansal
+**Venue:** ACL 2024
+**Paper:** [arXiv:2309.13007](https://arxiv.org/abs/2309.13007)
+**Official repo:** [dinobby/ReConcile](https://github.com/dinobby/ReConcile)
 
-The original research, implementation, datasets, and reported results belong to the original authors. This repository presents an implementation study with independent documentation and technical observations; it does not claim authorship of the ReConcile method or the authors' original code.
+The research, the original code, the datasets, and the reported results are the original authors' work. What's here is my own documentation and technical observations. I'm not claiming authorship of the ReConcile method or the authors' code.
 
-The original license and copyright notice are retained in [`LICENSE`](LICENSE).
+The original license and copyright notice are kept in [`LICENSE`](LICENSE).
 
 ## Citation
 
@@ -260,8 +238,6 @@ The original license and copyright notice are retained in [`LICENSE`](LICENSE).
 }
 ```
 
-## Implementation Notes
+## Implementation notes
 
-Detailed code-level walkthrough:
-
-[`docs/IMPLEMENTATION_NOTES.md`](docs/IMPLEMENTATION_NOTES.md)
+For a more detailed, code-level walkthrough, see [`docs/IMPLEMENTATION_NOTES.md`](docs/IMPLEMENTATION_NOTES.md).
