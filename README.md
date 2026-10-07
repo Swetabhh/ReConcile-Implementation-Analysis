@@ -23,7 +23,7 @@ I worked through the authors' official codebase to understand how the system is 
 - how confidence values are converted into weighted votes;
 - how raw model outputs are parsed, normalized, and evaluated.
 
-![Multi-round discussion](https://i.imgur.com/4UmumgD.png)
+![Multi-round discussion](https://camo.githubusercontent.com/aad0afbd7e71ccb2b33ca6f01fe498ccb9fff8ed6a22d3a1d016cdde142d178e/68747470733a2f2f692e696d6775722e636f6d2f34754d756d67442e706e67)
 
 ## What This Repository Is (and Is Not)
 
