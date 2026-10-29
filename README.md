@@ -1,4 +1,4 @@
-# ReConcile — Implementation Study & Independent Analysis
+# ReConcile: Implementation Study & Independent Analysis
 
 **Paper:** *ReConcile: Round-Table Conference Improves Reasoning via Consensus Among Diverse LLMs*  
 **Venue:** ACL 2024  
